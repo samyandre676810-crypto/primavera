@@ -1,0 +1,705 @@
+<!DOCTYPE html>
+<html lang="pt-BR">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>Primavera</title>
+<meta name="theme-color" content="#05080d">
+<meta name="description" content="Primavera, sua assistente pessoal por voz">
+<link rel="manifest" href="manifest.webmanifest">
+<link rel="icon" type="image/png" href="icon-192.png">
+<link rel="apple-touch-icon" href="icon-192.png">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-title" content="Primavera">
+<style>
+:root{--c:#00e5ff;--rosa:#ff4081;--bg:#05080d}
+*{box-sizing:border-box}
+body{margin:0;background:radial-gradient(circle at 50% 20%,#0b1a26,var(--bg));color:#e8faff;font-family:system-ui,Arial,sans-serif;min-height:100vh;display:flex;flex-direction:column;align-items:center;padding:16px;padding-bottom:max(16px,env(safe-area-inset-bottom))}
+h1{margin:6px 0 0;color:var(--c);letter-spacing:6px;font-weight:300}
+#status{font-size:13px;opacity:.7;margin:4px 0 12px;letter-spacing:2px;text-transform:uppercase}
+#orb{width:130px;height:130px;border-radius:50%;background:radial-gradient(circle at 35% 35%,#aaf6ff,var(--c) 60%,#007a8a);box-shadow:0 0 40px var(--c);transition:.4s;animation:respira 3s infinite ease-in-out}
+@keyframes respira{0%,100%{transform:scale(1)}50%{transform:scale(1.06)}}
+body.ouvindo #orb{--c:#00ff9d;box-shadow:0 0 60px #00ff9d;animation:respira 1s infinite}
+body.pensando #orb{background:radial-gradient(circle at 35% 35%,#ffe9a8,#ffb300 60%,#7a5200);box-shadow:0 0 60px #ffb300;animation:gira 1s infinite linear;border-radius:42% 58% 55% 45%}
+body.falando #orb{background:radial-gradient(circle at 35% 35%,#ffc2d9,var(--rosa) 60%,#7a0b33);box-shadow:0 0 70px var(--rosa);animation:respira .5s infinite}
+@keyframes gira{to{transform:rotate(360deg)}}
+#chat{width:100%;max-width:640px;flex:1;min-height:200px;max-height:40vh;overflow-y:auto;background:#0d141c;border:1px solid #16303d;border-radius:16px;padding:12px;margin:16px 0 10px}
+#chat p{margin:6px 0;line-height:1.4;word-wrap:break-word}
+.criador b{color:var(--c)} .primavera b{color:var(--rosa)} .sistema{opacity:.6;font-size:13px}
+#chat a{color:var(--c)}
+.linha{display:flex;gap:8px;width:100%;max-width:640px}
+input,select{flex:1;min-width:0;padding:12px 16px;border-radius:24px;border:1px solid #16303d;background:#0d141c;color:#fff;font-size:16px}
+button{background:var(--c);color:#001;border:none;padding:12px 16px;border-radius:24px;font-size:15px;font-weight:700;cursor:pointer}
+button[hidden]{display:none}
+button.sec{background:#16303d;color:var(--c)}
+button.on{background:#00ff9d;color:#001}
+.botoes{display:flex;flex-wrap:wrap;gap:8px;justify-content:center;margin-top:10px}
+details{width:100%;max-width:640px;margin-top:12px;background:#0d141c;border:1px solid #16303d;border-radius:12px;padding:10px 14px}
+summary{cursor:pointer;color:var(--c)}
+details label{display:block;margin:10px 0 4px;font-size:13px;opacity:.8}
+details input,details select{width:100%}
+small{opacity:.6;display:block;margin-top:8px;line-height:1.4}
+ul{padding-left:18px;margin:8px 0}
+li{margin:4px 0;line-height:1.4}
+.lem{display:flex;justify-content:space-between;align-items:center;gap:8px}
+.lem button{padding:4px 10px;font-size:13px}
+</style>
+</head>
+<body>
+<h1>PRIMAVERA</h1>
+<div id="status">Em espera</div>
+<div id="orb"></div>
+<div id="chat"></div>
+
+<div class="linha">
+  <input id="texto" placeholder="Fale ou digite..." autocomplete="off">
+  <button onclick="enviarTexto()">Enviar</button>
+</div>
+<div class="botoes">
+  <button class="sec" id="btnFalar" onclick="falarUmaVez()">🎤 Falar</button>
+  <button class="sec" id="btnSempre" onclick="alternarSempre()">👂 Sempre ligada</button>
+  <button class="sec" onclick="calar()">⏹ Parar voz</button>
+  <button id="btnInstalar" hidden onclick="instalar()">📲 Instalar app</button>
+</div>
+
+<details id="painelLembretes">
+  <summary>⏰ Lembretes e timers</summary>
+  <ul id="listaLembretes"></ul>
+  <small>Diga: "me lembre de tomar remédio em 10 minutos", "me lembre de ligar para a mamãe amanhã às 9h" ou "timer de 5 minutos". Os avisos tocam enquanto o app estiver aberto.</small>
+</details>
+
+<details>
+  <summary>💡 O que eu sei fazer</summary>
+  <ul>
+    <li>Conversar sobre qualquer assunto (Gemini)</li>
+    <li>"Como está o clima em Curitiba?" / "Vai chover amanhã?"</li>
+    <li>"Toca Djavan" ou "toca Legião Urbana no Spotify"</li>
+    <li>"Me lembre de ... às 15h30", "timer de 10 minutos"</li>
+    <li>"Anote comprar pão", "o que você anotou?"</li>
+    <li>"Abrir YouTube", "pesquisar receita de bolo"</li>
+    <li>"Que horas são?", "Que dia é hoje?"</li>
+  </ul>
+</details>
+
+<details id="config">
+  <summary>⚙️ Configurações</summary>
+  <label>Chave da API do Google AI Studio</label>
+  <input id="cfgChave" type="password" placeholder="Cole sua chave aqui" autocomplete="off">
+  <label>Modelo de conversa</label>
+  <input id="cfgModelo" placeholder="gemini-2.5-flash">
+  <label>Seu apelido (como ela te chama)</label>
+  <input id="cfgApelido" placeholder="chefe">
+  <label>Cidade padrão do clima (opcional)</label>
+  <input id="cfgCidade" placeholder="Ex.: São Paulo">
+  <label>Voz</label>
+  <select id="cfgMotor">
+    <option value="gemini">Doce e natural (Gemini)</option>
+    <option value="navegador">Voz do navegador</option>
+  </select>
+  <label>Timbre da voz doce</label>
+  <select id="cfgVoz">
+    <option value="Achernar">Achernar (suave)</option>
+    <option value="Vindemiatrix">Vindemiatrix (gentil)</option>
+    <option value="Sulafat">Sulafat (calorosa)</option>
+    <option value="Despina">Despina (macia)</option>
+    <option value="Aoede">Aoede (leve)</option>
+    <option value="Leda">Leda (jovem)</option>
+    <option value="Kore">Kore (firme)</option>
+  </select>
+  <label>Modelo da voz doce</label>
+  <input id="cfgModeloTts" placeholder="gemini-2.5-flash-preview-tts">
+  <div class="botoes">
+    <button onclick="salvarConfig()">Salvar</button>
+    <button class="sec" onclick="testarVoz()">▶ Testar voz</button>
+  </div>
+  <small>A chave fica só neste aparelho (localStorage). Se a voz doce falhar ou atingir o limite gratuito, a Primavera usa a voz do navegador automaticamente. No iPhone, para instalar: Compartilhar → Adicionar à Tela de Início.</small>
+</details>
+
+<script>
+// ============================================================
+//  PARTE PURA (sem DOM): interpretação de tempo, lembretes, clima
+// ============================================================
+// <PURE>
+const NUM = {um:1,uma:1,dois:2,duas:2,"três":3,tres:3,quatro:4,cinco:5,seis:6,sete:7,oito:8,nove:9,dez:10,quinze:15,vinte:20,trinta:30,quarenta:40,cinquenta:50};
+const NUMRE = "\\d+|um|uma|dois|duas|três|tres|quatro|cinco|seis|sete|oito|nove|dez|quinze|vinte|trinta|quarenta|cinquenta";
+const UN_MS = {segundo:1000,minuto:60000,hora:3600000,dia:86400000};
+const valorNum = (s) => /^\d+$/.test(s) ? parseInt(s, 10) : NUM[s];
+const unidade = (s) => UN_MS[s.replace(/s$/, "")];
+
+function formatarDur(ms){
+  const s = Math.round(ms / 1000);
+  if (s < 60) return s + " segundo" + (s === 1 ? "" : "s");
+  const m = Math.round(s / 60);
+  if (m < 60) return m + " minuto" + (m === 1 ? "" : "s");
+  const h = Math.floor(m / 60), r = m % 60;
+  if (h < 24) return h + " hora" + (h === 1 ? "" : "s") + (r ? " e " + r + " minuto" + (r === 1 ? "" : "s") : "");
+  const d = Math.round(h / 24);
+  return d + " dia" + (d === 1 ? "" : "s");
+}
+
+function descreverQuando(ts, agora){
+  const d = new Date(ts), a = new Date(agora);
+  const hh = String(d.getHours()).padStart(2, "0") + ":" + String(d.getMinutes()).padStart(2, "0");
+  const dia0 = new Date(a.getFullYear(), a.getMonth(), a.getDate()).getTime();
+  const dia1 = new Date(d.getFullYear(), d.getMonth(), d.getDate()).getTime();
+  const diff = Math.round((dia1 - dia0) / 86400000);
+  const quando = diff === 0 ? "hoje" : diff === 1 ? "amanhã" : "dia " + d.toLocaleDateString("pt-BR", {day: "numeric", month: "long"});
+  return quando + " às " + hh;
+}
+
+function parseTimer(original){
+  const p = original.toLowerCase();
+  if (!/\b(timer|cron[ôo]metro)\b/.test(p)) return null;
+  let ms = 0, achou = false;
+  if (/meia hora/.test(p)) { ms += 1800000; achou = true; }
+  if (/hora e meia/.test(p)) { ms += 1800000; achou = true; }
+  const re = new RegExp("\\b(" + NUMRE + ")\\s*(segundos?|minutos?|horas?)", "g");
+  let m;
+  while ((m = re.exec(p))) { ms += valorNum(m[1]) * unidade(m[2]); achou = true; }
+  return achou ? {ms: ms} : {erro: "duracao"};
+}
+
+function horaDe(h, mi, per){
+  h = +h; mi = mi ? +mi : 0;
+  if (per) {
+    if (/tarde|noite/.test(per) && h < 12) h += 12;
+    if (/madrugada/.test(per) && h === 12) h = 0;
+  }
+  if (h > 23 || mi > 59) return null;
+  return [h, mi];
+}
+
+function parseLembrete(original, agora){
+  const p = original.toLowerCase();
+  const g = p.match(/\b(me\s+lembr[ea]|lembre-me|me\s+avis[ea]|cri[ae]\s+um\s+lembrete|lembrete|me\s+acord[ea])\b/);
+  if (!g) return null;
+  const acordar = /me\s+acord[ea]/.test(g[0]);
+  const PER = "(da\\s+manh[ãa]|da\\s+tarde|da\\s+noite|da\\s+madrugada)";
+  let quando = null, ini = -1, fim = -1, relativo = false, m;
+
+  m = p.match(/\b(?:daqui\s+a|daqui|em)\s+meia\s+hora\b/);
+  if (m) { quando = agora.getTime() + 1800000; ini = m.index; fim = ini + m[0].length; relativo = true; }
+
+  if (!quando) {
+    m = p.match(new RegExp("\\b(?:daqui\\s+a|daqui|em)\\s+(" + NUMRE + ")\\s*(segundos?|minutos?|horas?|dias?)\\b"));
+    if (m) { quando = agora.getTime() + valorNum(m[1]) * unidade(m[2]); ini = m.index; fim = ini + m[0].length; relativo = true; }
+  }
+
+  if (!quando) {
+    let hm = null;
+    m = p.match(new RegExp("(?:^|\\s)(?:às|ás)\\s+(\\d{1,2})(?:\\s*(?::|horas?|h)\\s*(\\d{2})?)?(?:\\s+" + PER + ")?"));
+    if (!m) m = p.match(new RegExp("(?:^|\\s)as\\s+(\\d{1,2})\\s*(?::|horas?|h)\\s*(\\d{2})?(?:\\s+" + PER + ")?"));
+    if (!m) m = p.match(new RegExp("(?:^|\\s)(\\d{1,2})(?::|h)(\\d{2})?(?:\\s+" + PER + ")?(?=\\s|$|[.,!?])"));
+    if (m) hm = horaDe(m[1], m[2], m[3]);
+    if (!hm) {
+      const md = p.match(/(?:^|\s)(?:ao\s+)?meio[- ]dia(?=\s|$|[.,!?])/);
+      const mn = p.match(/(?:^|\s)(?:[àa]\s+)?meia[- ]noite(?=\s|$|[.,!?])/);
+      if (md) { m = md; hm = [12, 0]; }
+      else if (mn) { m = mn; hm = [0, 0]; }
+    }
+    if (hm && m) {
+      ini = m.index; fim = ini + m[0].length;
+      let dias = 0;
+      if (/depois de amanh[ãa]/.test(p)) dias = 2; else if (/amanh[ãa]/.test(p)) dias = 1;
+      const d = new Date(agora.getTime());
+      d.setDate(d.getDate() + dias);
+      d.setHours(hm[0], hm[1], 0, 0);
+      if (dias === 0 && d.getTime() <= agora.getTime()) d.setDate(d.getDate() + 1);
+      quando = d.getTime();
+    }
+  }
+  if (!quando) return {erro: "hora"};
+
+  let resto = original.slice(0, ini) + " " + original.slice(fim);
+  resto = resto.replace(/(^|\s)(depois de amanh[ãa]|amanh[ãa]|hoje)(?=\s|$|[.,!?])/ig, "$1 ");
+  resto = resto.replace(/\b(?:me\s+lembr[ea]|lembre-me|me\s+avis[ea]|cri[ae]\s+um\s+lembrete|um\s+lembrete|lembrete|me\s+acord[ea])\b\s*(?:de\b|para\b|que\b|:)?/ig, " ");
+  resto = resto.replace(/\b(primavera|por favor)\b,?/ig, " ");
+  resto = resto.replace(/\s+/g, " ").replace(/^[\s,.:;-]+|[\s,.:;-]+$/g, "").replace(/^(de|para|que)\s+/i, "");
+  if (!resto && acordar) resto = "acordar";
+  return {texto: resto, quando: quando, relativo: relativo, ms: quando - agora.getTime()};
+}
+
+function parseClima(original){
+  const p = original.toLowerCase();
+  const gatilho = /(clima|previs[ãa]o do tempo|como est[áa] o tempo|como vai estar o tempo|como vai ficar o tempo|vai chover|est[áa] chovendo|t[áa] chovendo|vai fazer (?:calor|frio)|que tempo|temperatura (?:hoje|agora|amanh[ãa]|aqui|em |l[áa]|de hoje|de amanh))/;
+  if (!gatilho.test(p)) return null;
+  const amanha = /amanh[ãa]/.test(p);
+  let cidade = null;
+  const re = /(?:^|\s)(?:em|para|de|no|na|do|da)\s+([^?.!,]+?)(?=\s+(?:hoje|amanh[ãa]|agora|neste|nesta|essa|esta|em|para|no|na)(?:\s|[?.!,]|$)|[?.!,]|$)/gi;
+  for (const mm of original.matchAll(re)) {
+    const c = mm[1].trim().replace(/^(?:o|a)\s+/i, "");
+    if (c && !/^(tempo|clima|hoje|amanh[ãa]|agora|previs[ãa]o|semana|dia|hora|aqui|l[áa])$/i.test(c)) { cidade = c; break; }
+  }
+  return {cidade: cidade, amanha: amanha};
+}
+
+function parseMusica(original){
+  const m = original.match(/(?:^|\s)(?:toca(?:r)?|toque|coloca(?:r)?|coloque|p[õo]e|quero ouvir|ouvir)\s+(?:uma\s+m[úu]sica\s+(?:do|da|de)\s+|a\s+m[úu]sica\s+|m[úu]sicas?\s+(?:do|da|de)\s+)?(.+)/i);
+  if (!m) return null;
+  let q = m[1].trim();
+  let servico = "ytmusic";
+  if (/\bno\s+spotify\b/i.test(q)) servico = "spotify";
+  else if (/\bno\s+youtube\s+music\b/i.test(q)) servico = "ytmusic";
+  else if (/\bno\s+youtube\b/i.test(q)) servico = "youtube";
+  q = q.replace(/\b(?:no|na)\s+(?:spotify|youtube\s+music|youtube)\b/ig, "").replace(/[?.!,]+$/, "").replace(/\s+/g, " ").trim();
+  if (!q) return null;
+  return {q: q, servico: servico};
+}
+// </PURE>
+
+// ============================================================
+//  Estado e armazenamento
+// ============================================================
+const $ = (id) => document.getElementById(id);
+const ls = (k, d) => { try { const v = JSON.parse(localStorage.getItem(k)); return v === null || v === undefined ? d : v; } catch (e) { return d; } };
+const PADRAO = {chave: "", modelo: "gemini-2.5-flash", apelido: "chefe", cidade: "", motor: "gemini", voz: "Achernar", modeloTts: "gemini-2.5-flash-preview-tts"};
+let cfg = Object.assign({}, PADRAO, ls("primavera_cfg", {}));
+let notas = ls("primavera_notas", []);
+let historico = ls("primavera_hist", []);
+let lembretes = ls("primavera_lembretes", []);
+const salvar = () => {
+  try {
+    localStorage.setItem("primavera_cfg", JSON.stringify(cfg));
+    localStorage.setItem("primavera_notas", JSON.stringify(notas));
+    localStorage.setItem("primavera_hist", JSON.stringify(historico.slice(-20)));
+    localStorage.setItem("primavera_lembretes", JSON.stringify(lembretes));
+  } catch (e) {}
+};
+
+function preencherConfig(){
+  $("cfgChave").value = cfg.chave; $("cfgModelo").value = cfg.modelo; $("cfgApelido").value = cfg.apelido;
+  $("cfgCidade").value = cfg.cidade; $("cfgMotor").value = cfg.motor; $("cfgVoz").value = cfg.voz; $("cfgModeloTts").value = cfg.modeloTts;
+}
+function lerConfig(){
+  cfg = {
+    chave: $("cfgChave").value.trim(),
+    modelo: $("cfgModelo").value.trim() || PADRAO.modelo,
+    apelido: $("cfgApelido").value.trim() || PADRAO.apelido,
+    cidade: $("cfgCidade").value.trim(),
+    motor: $("cfgMotor").value,
+    voz: $("cfgVoz").value,
+    modeloTts: $("cfgModeloTts").value.trim() || PADRAO.modeloTts
+  };
+  avisouTts = false;
+}
+function salvarConfig(){ lerConfig(); salvar(); $("config").open = false; falar("Configurações salvas."); }
+function testarVoz(){ lerConfig(); falar("Olá, " + cfg.apelido + ". Eu sou a Primavera. Como posso te ajudar hoje?"); }
+preencherConfig();
+
+// ============================================================
+//  Interface
+// ============================================================
+function mostrar(quem, texto){
+  const p = document.createElement("p");
+  p.className = quem;
+  if (quem === "sistema") p.textContent = texto;
+  else { const b = document.createElement("b"); b.textContent = quem + ": "; p.append(b, document.createTextNode(texto)); }
+  $("chat").append(p); $("chat").scrollTop = $("chat").scrollHeight;
+}
+function mostrarLink(rotulo, url){
+  const p = document.createElement("p"); p.className = "sistema";
+  const a = document.createElement("a"); a.href = url; a.target = "_blank"; a.rel = "noopener"; a.textContent = rotulo;
+  p.append(a); $("chat").append(p); $("chat").scrollTop = $("chat").scrollHeight;
+}
+function abrirLink(url, rotulo){
+  const w = window.open(url, "_blank");
+  if (!w) mostrarLink("Toque aqui para abrir: " + rotulo, url);
+}
+function estado(nome, rotulo){ document.body.className = nome; $("status").textContent = rotulo; }
+let pensando = false, falando = false, escutando = false, sempre = false, umaVez = false;
+function atualizarEstado(){
+  if (falando) estado("falando", "Falando");
+  else if (pensando) estado("pensando", "Processando");
+  else if (escutando) estado("ouvindo", sempre ? "Aguardando \"Primavera\"" : "Ouvindo");
+  else estado("", "Em espera");
+}
+
+// ============================================================
+//  Voz de saída: Gemini TTS (doce) com fallback para o navegador
+// ============================================================
+let audioCtx = null, fonteAtual = null, idFala = 0, avisouTts = false;
+function ctxAudio(){
+  if (!audioCtx) audioCtx = new (window.AudioContext || window.webkitAudioContext)();
+  if (audioCtx.state === "suspended") audioCtx.resume();
+  return audioCtx;
+}
+function b64ParaBytes(b64){
+  const bin = atob(b64); const u = new Uint8Array(bin.length);
+  for (let i = 0; i < bin.length; i++) u[i] = bin.charCodeAt(i);
+  return u;
+}
+function pcmParaBuffer(bytes, taxa){
+  const n = Math.floor(bytes.length / 2);
+  const dv = new DataView(bytes.buffer, bytes.byteOffset, n * 2);
+  const buf = ctxAudio().createBuffer(1, n, taxa || 24000);
+  const ch = buf.getChannelData(0);
+  for (let i = 0; i < n; i++) ch[i] = dv.getInt16(i * 2, true) / 32768;
+  return buf;
+}
+async function ttsGemini(texto){
+  const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cfg.modeloTts) + ":generateContent", {
+    method: "POST",
+    headers: {"Content-Type": "application/json", "x-goog-api-key": cfg.chave},
+    body: JSON.stringify({
+      contents: [{parts: [{text: "Diga de forma doce, suave e acolhedora: " + texto}]}],
+      generationConfig: {responseModalities: ["AUDIO"], speechConfig: {voiceConfig: {prebuiltVoiceConfig: {voiceName: cfg.voz}}}}
+    })
+  });
+  const j = await res.json();
+  if (!res.ok) throw new Error(j.error?.message || ("HTTP " + res.status));
+  const dado = (j.candidates?.[0]?.content?.parts || []).find(x => x.inlineData)?.inlineData;
+  if (!dado?.data) throw new Error("A voz veio vazia.");
+  const m = /rate=(\d+)/.exec(dado.mimeType || "");
+  return pcmParaBuffer(b64ParaBytes(dado.data), m ? +m[1] : 24000);
+}
+function tocarBuffer(buf){
+  return new Promise((ok) => {
+    const ctx = ctxAudio(), s = ctx.createBufferSource();
+    s.buffer = buf; s.connect(ctx.destination); fonteAtual = s;
+    s.onended = () => { if (fonteAtual === s) fonteAtual = null; ok(); };
+    s.start();
+  });
+}
+function escolherVozNavegador(){
+  const vs = speechSynthesis.getVoices().filter(v => /^pt/i.test(v.lang));
+  return vs.find(v => /francisca|maria|luciana|vit[óo]ria|feminina|female/i.test(v.name) && /BR/i.test(v.lang))
+      || vs.find(v => /BR/i.test(v.lang)) || vs[0] || null;
+}
+function falarNavegador(texto){
+  return new Promise((ok) => {
+    const frases = texto.split(/(?<=[.!?])\s+/).filter(Boolean);
+    let i = 0;
+    const proxima = () => {
+      if (i >= frases.length) return ok();
+      const v = new SpeechSynthesisUtterance(frases[i++]);
+      v.lang = "pt-BR"; v.rate = 0.98; v.pitch = 1.15;
+      const voz = escolherVozNavegador(); if (voz) v.voice = voz;
+      v.onend = proxima; v.onerror = ok;
+      speechSynthesis.speak(v);
+    };
+    proxima();
+  });
+}
+function limparParaFala(t){ return t.replace(/[*_`#>]/g, "").replace(/\s+/g, " ").trim(); }
+function cancelarAudio(){
+  try { speechSynthesis.cancel(); } catch (e) {}
+  if (fonteAtual) { try { fonteAtual.stop(); } catch (e) {} fonteAtual = null; }
+}
+async function falar(texto){
+  mostrar("primavera", texto);
+  const meu = ++idFala;
+  pararEscuta(); cancelarAudio();
+  const limpo = limparParaFala(texto);
+  falando = true; atualizarEstado();
+  try {
+    if (cfg.motor === "gemini" && cfg.chave) {
+      try {
+        const buf = await ttsGemini(limpo);
+        if (meu !== idFala) return;
+        await tocarBuffer(buf);
+      } catch (e) {
+        if (meu !== idFala) return;
+        console.warn("Voz Gemini falhou:", e);
+        if (!avisouTts) { avisouTts = true; mostrar("sistema", "Voz doce indisponível agora (" + e.message + "). Usando a voz do navegador."); }
+        await falarNavegador(limpo);
+      }
+    } else {
+      await falarNavegador(limpo);
+    }
+  } finally {
+    if (meu === idFala) { falando = false; atualizarEstado(); if (sempre) setTimeout(iniciarEscuta, 300); }
+  }
+}
+function calar(){ idFala++; cancelarAudio(); falando = false; atualizarEstado(); }
+if ("speechSynthesis" in window) speechSynthesis.onvoiceschanged = () => {};
+
+// ============================================================
+//  Voz de entrada
+// ============================================================
+const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
+let rec = null;
+function iniciarEscuta(){
+  if (!SR) { mostrar("sistema", "Este navegador não suporta reconhecimento de voz. Use o Chrome ou o Edge."); return; }
+  if (escutando || falando) return;
+  rec = new SR();
+  rec.lang = "pt-BR"; rec.continuous = true; rec.interimResults = false;
+  rec.onresult = (e) => {
+    const t = e.results[e.results.length - 1][0].transcript.trim();
+    if (!t) return;
+    let fala = t;
+    if (sempre && !umaVez) {
+      if (!/primavera/i.test(t)) return;
+      fala = t.replace(/primavera[,.!?]*/ig, "").trim();
+      if (!fala) { falar("Pois não, " + cfg.apelido + "?"); return; }
+    }
+    if (umaVez) { umaVez = false; $("btnFalar").classList.remove("on"); pararEscuta(); }
+    mostrar("criador", fala);
+    pensar(fala);
+  };
+  rec.onerror = (e) => {
+    if (e.error === "not-allowed" || e.error === "service-not-allowed") {
+      sempre = false; umaVez = false;
+      $("btnSempre").classList.remove("on"); $("btnFalar").classList.remove("on");
+      mostrar("sistema", "Permissão de microfone negada. Libere o microfone nas configurações do navegador.");
+    }
+  };
+  rec.onend = () => {
+    escutando = false; atualizarEstado();
+    if ((sempre || umaVez) && !falando && !pensando) setTimeout(iniciarEscuta, 300);
+  };
+  try { rec.start(); escutando = true; atualizarEstado(); } catch (e) {}
+}
+function pararEscuta(){ if (rec && escutando) { try { rec.stop(); } catch (e) {} } }
+function falarUmaVez(){
+  ctxAudio(); calar(); umaVez = true; $("btnFalar").classList.add("on");
+  if (escutando) pararEscuta();
+  setTimeout(iniciarEscuta, 250);
+}
+function alternarSempre(){
+  ctxAudio();
+  sempre = !sempre;
+  $("btnSempre").classList.toggle("on", sempre);
+  if (sempre) { mostrar("sistema", "Modo sempre ligada: diga \"Primavera\" + o pedido."); falar("Modo sempre ligada ativado. Estou à disposição, " + cfg.apelido + "."); }
+  else { pararEscuta(); mostrar("sistema", "Modo sempre ligada desativado."); atualizarEstado(); }
+}
+
+// ============================================================
+//  Lembretes e timers
+// ============================================================
+function bip(){
+  try {
+    const c = ctxAudio(), t = c.currentTime;
+    [0, 0.35, 0.7].forEach((d) => {
+      const o = c.createOscillator(), g = c.createGain();
+      o.type = "sine"; o.frequency.value = 880;
+      g.gain.setValueAtTime(0.0001, t + d);
+      g.gain.exponentialRampToValueAtTime(0.3, t + d + 0.02);
+      g.gain.exponentialRampToValueAtTime(0.0001, t + d + 0.3);
+      o.connect(g); g.connect(c.destination); o.start(t + d); o.stop(t + d + 0.32);
+    });
+  } catch (e) {}
+}
+let swReg = null;
+async function notificar(titulo, corpo){
+  try {
+    if (!("Notification" in window) || Notification.permission !== "granted") return;
+    const reg = swReg || (navigator.serviceWorker && await navigator.serviceWorker.getRegistration());
+    if (reg && reg.showNotification) reg.showNotification(titulo, {body: corpo, icon: "icon-192.png", vibrate: [200, 100, 200], tag: "primavera-" + Date.now()});
+    else new Notification(titulo, {body: corpo, icon: "icon-192.png"});
+  } catch (e) {}
+}
+function pedirNotificacao(){
+  try { if ("Notification" in window && Notification.permission === "default") Notification.requestPermission(); } catch (e) {}
+}
+function renderLembretes(){
+  const ul = $("listaLembretes"); ul.textContent = "";
+  const pend = lembretes.slice().sort((a, b) => a.quando - b.quando);
+  if (!pend.length) { const li = document.createElement("li"); li.textContent = "Nenhum lembrete ativo."; ul.append(li); return; }
+  for (const l of pend) {
+    const li = document.createElement("li"); li.className = "lem";
+    const s = document.createElement("span"); s.textContent = descreverQuando(l.quando, Date.now()) + " — " + l.rotulo;
+    const b = document.createElement("button"); b.className = "sec"; b.textContent = "✕";
+    b.onclick = () => { lembretes = lembretes.filter(x => x.id !== l.id); salvar(); renderLembretes(); };
+    li.append(s, b); ul.append(li);
+  }
+}
+function adicionarLembrete(rotulo, msg, quando){
+  lembretes.push({id: Date.now() + Math.random(), rotulo: rotulo, msg: msg, quando: quando});
+  salvar(); renderLembretes(); pedirNotificacao();
+}
+function verificarLembretes(){
+  const agora = Date.now();
+  const vencidos = lembretes.filter(l => l.quando <= agora);
+  if (!vencidos.length) return;
+  lembretes = lembretes.filter(l => l.quando > agora);
+  salvar(); renderLembretes();
+  for (const l of vencidos) {
+    const atraso = agora - l.quando > 90000 ? "Lembrete atrasado, " + cfg.apelido + ". " : "";
+    bip();
+    notificar("Primavera", l.msg);
+    setTimeout(() => falar(atraso + l.msg), 1100);
+  }
+}
+setInterval(verificarLembretes, 1000);
+document.addEventListener("visibilitychange", () => { if (!document.hidden) verificarLembretes(); });
+renderLembretes();
+
+// ============================================================
+//  Clima (Open-Meteo, sem chave)
+// ============================================================
+const WMO = {0:"céu limpo",1:"céu quase limpo",2:"parcialmente nublado",3:"nublado",45:"neblina",48:"neblina",51:"garoa fraca",53:"garoa",55:"garoa forte",56:"garoa congelante",57:"garoa congelante",61:"chuva fraca",63:"chuva",65:"chuva forte",66:"chuva congelante",67:"chuva congelante",71:"neve fraca",73:"neve",75:"neve forte",77:"grãos de neve",80:"pancadas de chuva fracas",81:"pancadas de chuva",82:"pancadas de chuva fortes",85:"pancadas de neve",86:"pancadas de neve fortes",95:"trovoadas",96:"trovoadas com granizo",99:"trovoadas com granizo forte"};
+function posicao(){
+  return new Promise((ok, no) => {
+    if (!navigator.geolocation) return no(new Error("sem geolocalização"));
+    navigator.geolocation.getCurrentPosition(p => ok(p.coords), e => no(e), {timeout: 8000, maximumAge: 600000});
+  });
+}
+async function responderClima(c){
+  let cidade = c.cidade || cfg.cidade, lat, lon, nome = null;
+  pensando = true; atualizarEstado();
+  try {
+    if (cidade) {
+      const g = await (await fetch("https://geocoding-api.open-meteo.com/v1/search?name=" + encodeURIComponent(cidade) + "&count=1&language=pt&format=json")).json();
+      const r = g.results && g.results[0];
+      if (!r) { pensando = false; falar("Não encontrei a cidade " + cidade + "."); return; }
+      lat = r.latitude; lon = r.longitude; nome = r.name;
+    } else {
+      try { const p = await posicao(); lat = p.latitude; lon = p.longitude; }
+      catch (e) { pensando = false; falar("Não consegui sua localização. Diga o nome da cidade, ou defina uma cidade padrão nas configurações."); return; }
+    }
+    const url = "https://api.open-meteo.com/v1/forecast?latitude=" + lat + "&longitude=" + lon +
+      "&current=temperature_2m,apparent_temperature,weather_code&daily=weather_code,temperature_2m_max,temperature_2m_min,precipitation_probability_max&timezone=auto&forecast_days=2";
+    const j = await (await fetch(url)).json();
+    const lugar = nome ? "Em " + nome : "Onde você está";
+    const i = c.amanha ? 1 : 0;
+    const dd = j.daily, r0 = (x) => Math.round(x);
+    const prob = dd.precipitation_probability_max[i];
+    const probTxt = prob === null || prob === undefined ? "" : ", com " + prob + "% de chance de chuva";
+    let msg;
+    if (c.amanha) {
+      msg = lugar + ", amanhã deve ter " + (WMO[dd.weather_code[1]] || "tempo variável") + ", máxima de " + r0(dd.temperature_2m_max[1]) + " graus e mínima de " + r0(dd.temperature_2m_min[1]) + probTxt + ".";
+    } else {
+      msg = lugar + ", agora faz " + r0(j.current.temperature_2m) + " graus, com sensação de " + r0(j.current.apparent_temperature) + ", " + (WMO[j.current.weather_code] || "tempo variável") +
+        ". Hoje a máxima é de " + r0(dd.temperature_2m_max[0]) + " e a mínima de " + r0(dd.temperature_2m_min[0]) + probTxt + ".";
+    }
+    pensando = false; falar(msg);
+  } catch (e) {
+    console.error(e); pensando = false; falar("Não consegui buscar o clima agora. Verifique a internet.");
+  }
+}
+
+// ============================================================
+//  Comandos locais
+// ============================================================
+const SITES = {youtube:"https://youtube.com", whatsapp:"https://web.whatsapp.com", google:"https://google.com", gmail:"https://mail.google.com", spotify:"https://open.spotify.com", instagram:"https://instagram.com", netflix:"https://netflix.com", maps:"https://maps.google.com"};
+const BUSCA_MUSICA = {
+  spotify: ["Spotify", "https://open.spotify.com/search/"],
+  ytmusic: ["YouTube Music", "https://music.youtube.com/search?q="],
+  youtube: ["YouTube", "https://www.youtube.com/results?search_query="]
+};
+
+function comandoLocal(original){
+  const p = original.toLowerCase().trim();
+  const agora = new Date();
+
+  if (/^(pare|para|cala a boca|cale-se|silêncio|silencio)(\s+de\s+falar)?[.!]?$/.test(p)) { calar(); return true; }
+
+  const tm = parseTimer(original);
+  if (tm) {
+    if (tm.erro) { falar("Por quanto tempo? Diga, por exemplo, timer de cinco minutos."); return true; }
+    adicionarLembrete("Timer de " + formatarDur(tm.ms), "Seu timer de " + formatarDur(tm.ms) + " terminou.", agora.getTime() + tm.ms);
+    falar("Timer de " + formatarDur(tm.ms) + " iniciado."); return true;
+  }
+
+  if (/(meus lembretes|quais (?:são )?(?:os )?(?:meus )?lembretes|que lembretes)/.test(p)) {
+    const pend = lembretes.slice().sort((a, b) => a.quando - b.quando);
+    $("painelLembretes").open = true;
+    falar(pend.length ? "Você tem " + pend.length + " lembrete" + (pend.length > 1 ? "s" : "") + ". " + pend.map(l => l.rotulo + ", " + descreverQuando(l.quando, agora.getTime())).join(". ") + "."
+                      : "Você não tem lembretes ativos.");
+    return true;
+  }
+  if (/(apag(?:ar|ue)|limp(?:ar|e)|cancel(?:ar|e))\s+(?:todos\s+)?(?:os\s+|meus\s+)?(lembretes|timers?)/.test(p)) {
+    lembretes = []; salvar(); renderLembretes(); falar("Pronto, cancelei tudo."); return true;
+  }
+
+  const lem = parseLembrete(original, agora);
+  if (lem) {
+    if (lem.erro) { falar("Para quando? Diga, por exemplo, me lembre de tomar água em dez minutos, ou às 15 horas."); return true; }
+    const rotulo = lem.texto || "Aviso";
+    const msg = lem.texto ? "Lembrete: " + lem.texto + "." : "Seu aviso chegou.";
+    adicionarLembrete(rotulo, msg, lem.quando);
+    falar(lem.relativo ? "Pode deixar, aviso você em " + formatarDur(lem.ms) + "." : "Combinado. Lembrete para " + descreverQuando(lem.quando, agora.getTime()) + ".");
+    return true;
+  }
+
+  const cl = parseClima(original);
+  if (cl) { responderClima(cl); return true; }
+
+  const mu = parseMusica(original);
+  if (mu) {
+    const [nome, base] = BUSCA_MUSICA[mu.servico];
+    falar("Procurando " + mu.q + " no " + nome + ".");
+    abrirLink(base + encodeURIComponent(mu.q), mu.q + " no " + nome);
+    return true;
+  }
+
+  const abrir = p.match(/abr(?:ir|e|a)\s+(?:o\s+|a\s+)?(\w+)/);
+  if (abrir && SITES[abrir[1]]) { falar("Abrindo " + abrir[1] + "."); abrirLink(SITES[abrir[1]], abrir[1]); return true; }
+
+  const pesq = original.match(/(?:pesquisar?|pesquise|busque|buscar)\s+(?:por\s+|sobre\s+)?(.+)/i);
+  if (pesq) { falar("Pesquisando " + pesq[1] + "."); abrirLink("https://www.google.com/search?q=" + encodeURIComponent(pesq[1]), pesq[1]); return true; }
+
+  if (/apag(?:ar|ue)\s+(?:as\s+|todas as\s+)?(notas|anotações|anotacoes)/.test(p)) { notas = []; salvar(); falar("Notas apagadas."); return true; }
+  const anote = original.match(/anote(?:\s+na\s+mem[óo]ria)?[:,]?\s+(.+)/i);
+  if (anote) { notas.push(anote[1]); salvar(); falar("Anotado: " + anote[1]); return true; }
+  if (/o que (?:você|voce|vc) (?:anotou|lembra|tem salvo)|minhas notas|quais (?:são )?(?:as )?(?:minhas )?notas/.test(p)) {
+    falar(notas.length ? "Tenho salvo: " + notas.join(". ") : "Ainda não tenho nada salvo."); return true;
+  }
+
+  if (/que horas|que hora é|hora atual/.test(p)) { falar("Agora são " + agora.toLocaleTimeString("pt-BR", {hour: "2-digit", minute: "2-digit"}) + "."); return true; }
+  if (/que dia|data de hoje|qual a data/.test(p)) { falar("Hoje é " + agora.toLocaleDateString("pt-BR", {weekday: "long", day: "numeric", month: "long", year: "numeric"}) + "."); return true; }
+
+  return false;
+}
+
+// ============================================================
+//  Cérebro (Gemini)
+// ============================================================
+async function pensar(pergunta){
+  if (comandoLocal(pergunta)) return;
+  if (!cfg.chave) { $("config").open = true; falar("Preciso da sua chave da API nas configurações para conversar."); return; }
+
+  pensando = true; atualizarEstado();
+  const lemTxt = lembretes.length ? lembretes.map(l => l.rotulo + " (" + descreverQuando(l.quando, Date.now()) + ")").join("; ") : "nenhum";
+  const sistema = "Você é a Primavera, uma assistente de IA pessoal, inspirada na F.R.I.D.A.Y. do Tony Stark. " +
+    "Chame o usuário de \"" + cfg.apelido + "\". Seja elegante, eficiente e acolhedora, com leve ironia quando cabível. " +
+    "Suas respostas serão FALADAS em voz alta: use no máximo 3 frases curtas, sem markdown, sem listas, sem emojis, a menos que peçam algo longo. " +
+    "Você consegue por comando de voz: conversar, informar clima, abrir sites, procurar músicas no YouTube Music ou Spotify, criar lembretes e timers, anotar notas. " +
+    "Não finja executar ações que não estão nessa lista. " +
+    "Data e hora atuais: " + new Date().toLocaleString("pt-BR") + ". Notas salvas: " + (notas.length ? notas.join("; ") : "nenhuma") + ". Lembretes ativos: " + lemTxt + ".";
+
+  historico.push({role: "user", parts: [{text: pergunta}]});
+  try {
+    const res = await fetch("https://generativelanguage.googleapis.com/v1beta/models/" + encodeURIComponent(cfg.modelo) + ":generateContent", {
+      method: "POST",
+      headers: {"Content-Type": "application/json", "x-goog-api-key": cfg.chave},
+      body: JSON.stringify({systemInstruction: {parts: [{text: sistema}]}, contents: historico.slice(-10)})
+    });
+    const j = await res.json();
+    if (!res.ok) throw new Error(j.error?.message || ("HTTP " + res.status));
+    const resp = (j.candidates?.[0]?.content?.parts || []).map(x => x.text || "").join("").trim();
+    if (!resp) throw new Error("Resposta vazia.");
+    historico.push({role: "model", parts: [{text: resp}]});
+    salvar(); pensando = false; falar(resp);
+  } catch (e) {
+    historico.pop(); pensando = false; atualizarEstado();
+    console.error(e);
+    mostrar("sistema", "Erro: " + e.message);
+    falar("Não consegui falar com o servidor. Verifique sua chave, o modelo e a internet.");
+  }
+}
+
+function enviarTexto(){
+  const i = $("texto");
+  if (!i.value.trim()) return;
+  ctxAudio(); calar(); mostrar("criador", i.value); pensar(i.value); i.value = "";
+}
+$("texto").addEventListener("keydown", (e) => { if (e.key === "Enter") enviarTexto(); });
+
+// ============================================================
+//  App instalável (PWA)
+// ============================================================
+let promptInstalar = null;
+window.addEventListener("beforeinstallprompt", (e) => { e.preventDefault(); promptInstalar = e; $("btnInstalar").hidden = false; });
+window.addEventListener("appinstalled", () => { $("btnInstalar").hidden = true; promptInstalar = null; mostrar("sistema", "Primavera instalada."); });
+async function instalar(){ if (!promptInstalar) return; promptInstalar.prompt(); await promptInstalar.userChoice; promptInstalar = null; $("btnInstalar").hidden = true; }
+if ("serviceWorker" in navigator && /^https?:$/.test(location.protocol)) {
+  navigator.serviceWorker.register("sw.js").then(r => { swReg = r; }).catch(() => {});
+}
+
+mostrar("sistema", "Primavera online. Toque em 🎤 Falar ou ative 👂 Sempre ligada.");
+if (!cfg.chave) $("config").open = true;
+</script>
+</body>
+</html>
